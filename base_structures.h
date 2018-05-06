@@ -101,19 +101,21 @@ public:
 
 class logic //some logic api for server
 {
-protected:
+private:
+  logic() {}
+  logic(logic const &) = delete;
+  logic &operator=(logic const &) = delete;
+
   template <typename T>
   int create_task(int id);
+  std::map<int, std::shared_ptr<Simple_task>> loaded_users_desks;
 
-  static std::map<int, std::shared_ptr<Simple_task>> &loaded_users_desks()
-  {
-    static std::map<int, std::shared_ptr<Simple_task>> result;
-    return result;
-  }
   friend std::vector<int> Complex_task::remove_sub_tasks();
   friend std::pair<int, int> Complex_task::get_status();
 
 public:
+  static logic &get_instance();
+
   std::vector<int> load_desks(User user); //load desks to memory
   int write_desks();                      //write to file
   std::pair<int, int> get_status(int id); // return status for desk
@@ -185,10 +187,16 @@ int User::from_json()
 }
 
 //logic
+logic &logic::get_instance()
+{
+  static logic l;
+  return l;
+}
+
 std::shared_ptr<Simple_task> logic::get_task(int id)
 {
-  auto elem = logic::loaded_users_desks().find(id);
-  if (elem != logic::loaded_users_desks().end())
+  auto elem = logic::loaded_users_desks.find(id);
+  if (elem != logic::loaded_users_desks.end())
   {
     return elem->second;
   }
@@ -198,7 +206,7 @@ std::shared_ptr<Simple_task> logic::get_task(int id)
 int logic::write_desks()
 {
 
-  for (auto it : loaded_users_desks())
+  for (auto it : loaded_users_desks)
   {
     ptree pt;
     it.second->to_json(pt);
@@ -260,8 +268,8 @@ std::vector<int> logic::load_desks(User user)
 
 std::pair<int, int> logic::get_status(int id)
 {
-  auto elem = logic::loaded_users_desks().find(id);
-  if (elem != logic::loaded_users_desks().end())
+  auto elem = logic::loaded_users_desks.find(id);
+  if (elem != logic::loaded_users_desks.end())
   {
     return elem->second->get_status();
   }
@@ -276,17 +284,17 @@ int logic::create_task(int id)
 {
   std::shared_ptr<Simple_task> s(new T);
   s->set_id(id);
-  loaded_users_desks()[id] = s;
+  loaded_users_desks[id] = s;
   return id;
 }
 
 int logic::remove_task(int id)
 {
-  auto elem = loaded_users_desks().find(id);
-  if (elem != loaded_users_desks().end())
+  auto elem = loaded_users_desks.find(id);
+  if (elem != loaded_users_desks.end())
   {
     elem->second->pop_sub_tasks();
-    loaded_users_desks().erase(elem);
+    loaded_users_desks.erase(elem);
     return return_val::right;
   }
   else
@@ -314,11 +322,11 @@ std::vector<int> Complex_task::remove_sub_tasks()
   std::vector<int> popped;
   for (auto id : sub_tasks)
   {
-    auto elem = logic::loaded_users_desks().find(id);
-    if (elem != logic::loaded_users_desks().end())
+    auto elem = logic::get_instance().loaded_users_desks.find(id);
+    if (elem != logic::get_instance().loaded_users_desks.end())
     {
       elem->second->pop_sub_tasks();
-      logic::loaded_users_desks().erase(elem);
+      logic::get_instance().loaded_users_desks.erase(elem);
       popped.push_back(id);
     }
   }
@@ -346,8 +354,8 @@ std::pair<int, int> Complex_task::get_status()
   {
     std::pair<int, int> sub_status(0, 0);
 
-    auto elem = logic::loaded_users_desks().find(id_task);
-    if (elem != logic::loaded_users_desks().end())
+    auto elem = logic::get_instance().loaded_users_desks.find(id_task);
+    if (elem != logic::get_instance().loaded_users_desks.end())
     {
       status.second++;
       sub_status = elem->second->get_status();
