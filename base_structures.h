@@ -48,7 +48,7 @@ public:
 
   virtual void add_sub_task(int id) {}
   virtual int pop_sub_task(int id) { return return_val::none; }
-  virtual std::vector<int> pop_sub_tasks() { return std::vector<int>(); }
+  virtual std::vector<int> remove_sub_tasks() { return std::vector<int>(); }
   virtual std::vector<int> get_sub_tasks() { return std::vector<int>(); }
   virtual int to_json(ptree &pt);
 };
@@ -222,45 +222,48 @@ std::vector<int> logic::load_desks(User user)
   std::vector<int> loaded;
   for (auto id : idxs)
   {
-    try
+    if (loaded_users_desks.find(id) == loaded_users_desks.end())
     {
-      read_json(std::to_string(id), pt);
-      std::string type = pt.get<std::string>("type");
-      std::shared_ptr<Simple_task> task;
-      if (type == "Simple_task")
+      try
       {
-        create_simple_task(id);
-      }
-      if (type == "Complex_task")
-      {
-        create_complex_task(id);
-      }
-      if (type == "Desk")
-      {
-        create_desk(id);
-      }
-      task = get_task(id);
-      task->set_name(pt.get<std::string>("name"));
-      task->set_description(pt.get<std::string>("description"));
-      task->set_deadline(pt.get<time_t>("deadline"));
-      task->set_start_time(pt.get<time_t>("start_time"));
-      if (type != "Simple_task")
-      {
-        ptree arr = pt.get_child("sub_tasks");
-        for (auto sub : arr)
+        read_json(std::to_string(id), pt);
+        std::string type = pt.get<std::string>("type");
+        std::shared_ptr<Simple_task> task;
+        if (type == "Simple_task")
         {
-          task->add_sub_task(std::stoi(sub.first));
+          create_simple_task(id);
         }
+        if (type == "Complex_task")
+        {
+          create_complex_task(id);
+        }
+        if (type == "Desk")
+        {
+          create_desk(id);
+        }
+        task = get_task(id);
+        task->set_name(pt.get<std::string>("name"));
+        task->set_description(pt.get<std::string>("description"));
+        task->set_deadline(pt.get<time_t>("deadline"));
+        task->set_start_time(pt.get<time_t>("start_time"));
+        if (type != "Simple_task")
+        {
+          ptree arr = pt.get_child("sub_tasks");
+          for (auto sub : arr)
+          {
+            task->add_sub_task(std::stoi(sub.first));
+          }
+        }
+        if (type == "Desk")
+        {
+          //something whith path
+        }
+        loaded.push_back(id);
       }
-      if (type == "Desk")
+      catch (const json_parser_error &jpe)
       {
-        //something whith path
+        user.pop_perm(id);
       }
-      loaded.push_back(id);
-    }
-    catch (const json_parser_error &jpe)
-    {
-      user.pop_perm(id);
     }
   }
   return loaded;
@@ -293,14 +296,14 @@ int logic::remove_task(int id)
   auto elem = loaded_users_desks.find(id);
   if (elem != loaded_users_desks.end())
   {
-    elem->second->pop_sub_tasks();
-    loaded_users_desks.erase(elem);
-    return return_val::right;
+    elem->second->remove_sub_tasks();
+    if (remove(std::to_string(elem->second->get_id()).c_str()))
+    {
+      loaded_users_desks.erase(elem);
+      return return_val::right;
+    }
   }
-  else
-  {
-    return return_val::error; //desk didn't found
-  }
+  return return_val::error; //desk didn't found
 }
 
 //Desk
@@ -315,7 +318,7 @@ int Desk::to_json(ptree &pt)
 void Complex_task::add_sub_task(int id)
 {
   sub_tasks.push_back(id);
-};
+}
 
 std::vector<int> Complex_task::remove_sub_tasks()
 {
@@ -325,9 +328,12 @@ std::vector<int> Complex_task::remove_sub_tasks()
     auto elem = logic::get_instance().loaded_users_desks.find(id);
     if (elem != logic::get_instance().loaded_users_desks.end())
     {
-      elem->second->pop_sub_tasks();
-      logic::get_instance().loaded_users_desks.erase(elem);
-      popped.push_back(id);
+      elem->second->remove_sub_tasks();
+      if (remove(std::to_string(elem->second->get_id()).c_str()))
+      {
+        logic::get_instance().loaded_users_desks.erase(elem);
+        popped.push_back(id);
+      }
     }
   }
   return popped;
