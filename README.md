@@ -11,6 +11,6 @@
 For building program Automake and Autoconfig used
 Build package using following commands:
 
-username:~$ autoreconf --install
-username:~$ ./configure
-username:~$ make
+    username:~$ autoreconf --install
+    username:~$ ./configure
+    username:~$ make
